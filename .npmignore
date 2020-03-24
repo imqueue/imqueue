@@ -42,6 +42,5 @@ tsconfig.json
 tslint.json
 .codebeatsettings
 .codebeatignore
-bin/
 .git/
 examples/
