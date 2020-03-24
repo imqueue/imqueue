@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Meta-package for @imqueue framework",
   "scripts": {
-    "postinstall": "./bin/post-install.js"
+    "postinstall": "bin/post-install.js"
   },
   "author": "imqueue.com <support@imqueue.com>",
   "license": "ISC",
