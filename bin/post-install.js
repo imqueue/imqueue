@@ -14,13 +14,13 @@
  * OTHER TORTUOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
-const cwd = process.env.INIT_CWD || process.cwd();
 const { resolve } = require('path');
 const { writeFileSync } = require('fs');
 const { execSync } = require('child_process');
+
+const cwd = process.env.INIT_CWD || process.cwd();
 const targetFile = resolve(cwd, 'package.json');
-const sourcePackage = require(resolve(__dirname, '..', 'package.json'));
-let targetPackage = require(targetFile);
+const sourceFile = resolve(__dirname, '..', 'package.json');
 
 const RX_SEMVER = new RegExp(
     '^v?(?:\\d+)(\\.(?:[x*]|\\d+)(\\.(?:[x*]|\\d+)(\\.(?:[x*]|\\d+))?' +
@@ -158,7 +158,10 @@ function clear(version) {
     return version.replace(RX_CLS, '');
 }
 
-function merge(src, dst) {
+function merge(srcFile, dstFile) {
+    const src = require(srcFile);
+    const dst = require(dstFile);
+
     if (!src.dependencies) {
         console.log('Wrong source package!');
         return process.exit(1);
@@ -192,22 +195,24 @@ function merge(src, dst) {
     return pkg;
 }
 
-const pkg = merge(sourcePackage, targetPackage);
+// execSync(
+//     'npm install --ignore-scripts',
+//     { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
+// );
+execSync(
+    'npm install -g @imqueue/cli',
+    { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
+);
 
-console.error(cwd, pkg);
+setTimeout(() => {
+    const pkg = merge(sourceFile, targetFile);
 
-if (pkg) {
+    console.error(cwd, pkg);
+
     writeFileSync(
         targetFile,
         JSON.stringify(pkg, null, 2),
         { encoding: 'utf8' },
     );
-    execSync(
-        'npm install --ignore-scripts',
-        { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
-    );
-    execSync(
-        'npm install -g @imqueue/cli',
-        { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
-    );
-}
+}, 3000);
+
