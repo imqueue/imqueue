@@ -194,7 +194,7 @@ function merge(src, dst) {
 
 const pkg = merge(sourcePackage, targetPackage);
 
-console.log(cwd, pkg);
+console.error(cwd, pkg);
 
 if (pkg) {
     writeFileSync(
