@@ -14,7 +14,7 @@
  * OTHER TORTUOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
-const cwd = process.cwd();
+const cwd = process.env.INIT_CWD || process.cwd();
 const { resolve } = require('path');
 const { writeFileSync } = require('fs');
 const { execSync } = require('child_process');
@@ -194,7 +194,7 @@ function merge(src, dst) {
 
 const pkg = merge(sourcePackage, targetPackage);
 
-console.error(cwd, pkg, process.env.INIT_CWD);
+console.error(cwd, pkg);
 
 if (pkg) {
     writeFileSync(
@@ -202,10 +202,10 @@ if (pkg) {
         JSON.stringify(pkg, null, 2),
         { encoding: 'utf8' },
     );
-    execSync(
-        'npm install --ignore-scripts',
-        { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
-    );
+    // execSync(
+    //     'npm install --ignore-scripts',
+    //     { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
+    // );
     execSync(
         'npm install -g @imqueue/cli',
         { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
