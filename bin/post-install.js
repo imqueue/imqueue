@@ -14,10 +14,10 @@
  * OTHER TORTUOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+const cwd = process.cwd();
 const { resolve } = require('path');
 const { writeFileSync } = require('fs');
 const { execSync } = require('child_process');
-const cwd = process.cwd();
 const targetFile = resolve(cwd, 'package.json');
 const sourcePackage = require(resolve(__dirname, '..', 'package.json'));
 let targetPackage = require(targetFile);
@@ -31,6 +31,15 @@ const RX_SEMVER = new RegExp(
 const RX_V = /^v/;
 const RX_ESC = /\+.*$/;
 const RX_CLS = /^[~^]/;
+
+const allowedOperators = ['>', '>=', '=', '<', '<='];
+const operatorResMap = {
+    '>': [1],
+    '>=': [0, 1],
+    '=': [0],
+    '<=': [-1, 0],
+    '<': [-1],
+};
 
 function indexOrEnd(str, q) {
     return !~str.indexOf(q) ? str.length : str.indexOf(q);
@@ -120,22 +129,6 @@ function compareVersions(v1, v2) {
     return 0;
 }
 
-const allowedOperators = [
-    '>',
-    '>=',
-    '=',
-    '<',
-    '<=',
-];
-
-const operatorResMap = {
-    '>': [1],
-    '>=': [0, 1],
-    '=': [0],
-    '<=': [-1, 0],
-    '<': [-1],
-};
-
 function validateOperator(op) {
     if (typeof op !== 'string') {
         throw new TypeError(
@@ -200,6 +193,8 @@ function merge(src, dst) {
 }
 
 const pkg = merge(sourcePackage, targetPackage);
+
+console.log(cwd, pkg);
 
 if (pkg) {
     writeFileSync(
