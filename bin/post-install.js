@@ -202,10 +202,10 @@ if (pkg) {
         JSON.stringify(pkg, null, 2),
         { encoding: 'utf8' },
     );
-    // execSync(
-    //     'npm install --ignore-scripts',
-    //     { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
-    // );
+    execSync(
+        'npm install --ignore-scripts',
+        { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
+    );
     execSync(
         'npm install -g @imqueue/cli',
         { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
