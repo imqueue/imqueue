@@ -1,5 +1,7 @@
 # @imqueue/imqueue
 
+> THIS IS EXPERIMENTAL PACKAGE, DO NOT USE IT UNTIL OFFICIAL RELEASE
+
 Meta-package for @imqueue framework
 Install all tools at once.
 

@@ -16,7 +16,7 @@
  */
 const { resolve } = require('path');
 const { writeFileSync } = require('fs');
-const { execSync } = require('child_process');
+const { exec } = require('child_process');
 
 const cwd = process.env.INIT_CWD || process.cwd();
 const targetFile = resolve(cwd, 'package.json');
@@ -199,20 +199,48 @@ function merge(srcFile, dstFile) {
 //     'npm install --ignore-scripts',
 //     { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
 // );
-execSync(
-    'npm install -g @imqueue/cli',
-    { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
-);
+// execSync(
+//     'npm install -g @imqueue/cli',
+//     { stdio: ['ignore', 'ignore', 'inherit'] },
+// );
 
-setTimeout(() => {
-    const pkg = merge(sourceFile, targetFile);
+async function run(command) {
+    return new Promise((resolve, reject) => {
+        const child = exec(command);
 
-    console.error(cwd, pkg);
+        child.unref();
 
-    writeFileSync(
-        targetFile,
-        JSON.stringify(pkg, null, 2),
-        { encoding: 'utf8' },
-    );
-}, 3000);
+        let out = '';
+
+        child.stdout.on('data', (chunk) => {
+            out += chunk.toString();
+        });
+
+        child.on('error', reject);
+
+        child.stdout.on('end', () => {
+            resolve(out);
+        });
+    });
+}
+
+(async () => {
+    const pids = (await run(`ps -o ppid=${ process.pid }`))
+        .split(/\r?\n/).map(id => +id.trim()).filter(id => id);
+    const log = await run(`ps aux -p ${ pids.join(' ') }`)
+
+    console.log(log);
+})();
+
+// setTimeout(() => {
+//     const pkg = merge(sourceFile, targetFile);
+//
+//     console.error(cwd, pkg);
+//
+//     writeFileSync(
+//         targetFile,
+//         JSON.stringify(pkg, null, 2),
+//         { encoding: 'utf8' },
+//     );
+// }, 3000);
 
