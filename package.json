@@ -1,0 +1,21 @@
+{
+  "name": "@imqueue/imqueue",
+  "version": "0.0.0",
+  "description": "Meta-package for @imqueue framework",
+  "scripts": {
+    "postinstall": "./bin/post-install.js"
+  },
+  "author": "imqueue.com <support@imqueue.com>",
+  "license": "ISC",
+  "dependencies": {
+    "@imqueue/async-logger": "^1.0.0",
+    "@imqueue/core": "^1.7.3",
+    "@imqueue/dd-trace": "^1.1.11",
+    "@imqueue/js": "^1.2.1",
+    "@imqueue/pg-cache": "^2.0.2",
+    "@imqueue/pg-pubsub": "^1.3.7",
+    "@imqueue/rpc": "^1.10.8",
+    "@imqueue/sequelize": "^1.2.5",
+    "@imqueue/tag-cache": "^1.1.5"
+  }
+}
