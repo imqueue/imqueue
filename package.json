@@ -1,6 +1,6 @@
 {
   "name": "@imqueue/imqueue",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Meta-package for @imqueue framework",
   "scripts": {
     "postinstall": "./node_modules/@imqueue/imqueue/bin/post-install.js"
