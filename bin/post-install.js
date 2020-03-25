@@ -17,9 +17,12 @@
 const { resolve } = require('path');
 const { exec } = require('child_process');
 
-const cwd = process.env.INIT_CWD || process.cwd();
+const cwd = process.env.INIT_CWD;
 const targetFile = resolve(cwd, 'package.json');
 const sourceFile = resolve(__dirname, '..', 'package.json');
+
+console.log(sourceFile);
+console.log(targetFile);
 
 const RX_SEMVER = new RegExp(
     '^v?(?:\\d+)(\\.(?:[x*]|\\d+)(\\.(?:[x*]|\\d+)(\\.(?:[x*]|\\d+))?' +
@@ -181,6 +184,7 @@ function merge(srcFile, dstFile) {
                 clear(dst.dependencies[name]),
                 '>',
             );
+
             if (greater) {
                 dst.dependencies[name] = version;
                 pkg = dst;
