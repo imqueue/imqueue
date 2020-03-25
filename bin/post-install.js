@@ -191,8 +191,7 @@ function merge(srcFile, dstFile) {
         }
     }
 
-    return dst;
-    // return pkg;
+    return pkg;
 }
 
 const RX_NL = /\r?\n/;
