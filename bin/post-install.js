@@ -163,20 +163,18 @@ function clear(version) {
 function merge(srcFile, dstFile) {
     const src = require(srcFile);
     const dst = require(dstFile);
+    let pkg = null;
 
     if (!src.dependencies) {
-        console.log('Wrong source package!');
-        return process.exit(1);
+        return pkg;
     }
 
     if (!dst.dependencies) {
         dst.dependencies = {};
     }
 
-    let pkg = null;
-
     for (const name of Object.keys(src.dependencies)) {
-        const version = dst.dependencies[name];
+        const version = src.dependencies[name];
 
         if (dst.dependencies[name]) {
             const greater = compare(
@@ -219,7 +217,6 @@ async function run(command) {
         .split(RX_NL).map(id => +id.trim()).filter(id => id);
     const log = await run(`ps -o pid,command ${pids.join(' ')} | grep npm`);
     const ppid = +(log.split(RX_NL)[0] || '').split(RX_SP)[0];
-
     const pkg = merge(sourceFile, targetFile);
 
     pkg && exec(`INIT_CWD="${cwd}" ${
