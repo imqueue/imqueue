@@ -220,8 +220,7 @@ async function run(command) {
 
     pkg && exec(`INIT_CWD="${cwd}" ${
         resolve(__dirname, 'update.sh')} ${
-        ppid } ${
-        targetFile } '${
+        ppid } '${
         JSON.stringify(pkg.dependencies) }' &`,
     );
 })();
