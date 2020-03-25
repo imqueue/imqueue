@@ -218,7 +218,7 @@ async function run(command) {
 
     const pkg = merge(sourceFile, targetFile);
 
-    pkg && exec(`${
+    pkg && exec(`INIT_CWD="${cwd}" ${
         resolve(__dirname, 'update.sh')} ${
         ppid } ${
         targetFile } '${

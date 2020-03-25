@@ -15,11 +15,13 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 const { writeFileSync } = require('fs');
-const { dirname, resolve } = require('path');
+const { resolve } = require('path');
 
-const depsJson = process.argv[3];
-const pkgPath = process.argv[2];
-const errLog = resolve(dirname(pkgPath), 'imq-install-error.log');
+const depsJson = process.argv[2];
+const pkgPath = resolve(process.env.INIT_CWD, 'package.json');
+const errLog = resolve(process.env.INIT_CWD, 'imq-install-error.log');
+const infoLog = resolve(process.env.INIT_CWD, 'imq-install.log');
+const encoding = 'utf8';
 
 try {
     const deps = JSON.parse(depsJson);
@@ -30,13 +32,18 @@ try {
         writeFileSync(
             pkgPath,
             JSON.stringify(pkg, null, 2),
-            { encoding: 'utf8' },
+            { encoding },
         );
     }
+    writeFileSync(
+        infoLog,
+        `Saved '${ depsJson }' to '${ pkgPath }'!\n`,
+        { encoding }
+    )
 } catch (err) {
     writeFileSync(
         errLog,
-        `Error saving '${ depsJson }' to ${pkgPath}\n${ err.stack }`,
-        { encoding: 'utf8' },
+        `Error saving '${ depsJson }' to '${pkgPath}\n${ err.stack }'`,
+        { encoding },
     );
 }
