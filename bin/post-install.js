@@ -15,7 +15,6 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 const { resolve } = require('path');
-const { writeFileSync } = require('fs');
 const { exec } = require('child_process');
 
 const cwd = process.env.INIT_CWD || process.cwd();
@@ -192,55 +191,38 @@ function merge(srcFile, dstFile) {
         }
     }
 
-    return pkg;
+    return dst;
+    // return pkg;
 }
 
-// execSync(
-//     'npm install --ignore-scripts',
-//     { cwd, stdio: ['ignore', 'ignore', 'inherit'] },
-// );
-// execSync(
-//     'npm install -g @imqueue/cli',
-//     { stdio: ['ignore', 'ignore', 'inherit'] },
-// );
+const RX_NL = /\r?\n/;
+const RX_SP = /\s+/;
 
 async function run(command) {
     return new Promise((resolve, reject) => {
+        let out = '';
         const child = exec(command);
 
         child.unref();
 
-        let out = '';
-
-        child.stdout.on('data', (chunk) => {
-            out += chunk.toString();
-        });
-
-        child.on('error', reject);
-
-        child.stdout.on('end', () => {
-            resolve(out);
-        });
+        child.stdout.on('data', (chunk) => (out += chunk.toString()));
+        child.stdout.on('error', reject);
+        child.stdout.on('end', () => resolve(out));
     });
 }
 
 (async () => {
-    const pids = (await run(`ps -o ppid=${ process.pid }`))
-        .split(/\r?\n/).map(id => +id.trim()).filter(id => id);
-    const log = await run(`ps aux -p ${ pids.join(' ') }`)
+    const pids = (await run(`ps -o ppid=${process.pid}`))
+        .split(RX_NL).map(id => +id.trim()).filter(id => id);
+    const log = await run(`ps -o pid,command ${pids.join(' ')} | grep npm`);
+    const ppid = +(log.split(RX_NL)[0] || '').split(RX_SP)[0];
 
-    console.log(log);
+    const pkg = merge(sourceFile, targetFile);
+
+    pkg && exec(`${
+        resolve(__dirname, 'update.sh')} ${
+        ppid } ${
+        targetFile } '${
+        JSON.stringify(pkg.dependencies) }' &`,
+    );
 })();
-
-// setTimeout(() => {
-//     const pkg = merge(sourceFile, targetFile);
-//
-//     console.error(cwd, pkg);
-//
-//     writeFileSync(
-//         targetFile,
-//         JSON.stringify(pkg, null, 2),
-//         { encoding: 'utf8' },
-//     );
-// }, 3000);
-
