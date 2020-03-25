@@ -16,7 +16,6 @@
  */
 const { writeFileSync } = require('fs');
 const { resolve } = require('path');
-const { exec } = require('child_process');
 
 const cwd = process.env.INIT_CWD;
 const targetFile = resolve(cwd, 'package.json');
@@ -144,11 +143,8 @@ function validateOperator(op) {
 }
 
 function compare(v1, v2, operator) {
-    // Validate operator
     validateOperator(operator);
 
-    // since result of compareVersions can only be -1 or 0 or 1
-    // a simple map can be used to replace switch
     const res = compareVersions(v1, v2);
 
     return operatorResMap[operator].indexOf(res) > -1;
@@ -194,35 +190,10 @@ function merge(srcFile, dstFile) {
     return pkg;
 }
 
-const RX_NL = /\r?\n/;
-const RX_SP = /\s+/;
+const pkg = merge(sourceFile, targetFile);
 
-async function run(command) {
-    return new Promise((resolve, reject) => {
-        let out = '';
-        const child = exec(command);
-
-        child.unref();
-
-        child.stdout.on('data', (chunk) => (out += chunk.toString()));
-        child.stdout.on('error', reject);
-        child.stdout.on('end', () => resolve(out));
-    });
-}
-
-(async () => {
-    const pkg = merge(sourceFile, targetFile);
-
-    writeFileSync(targetFile, JSON.stringify(pkg, null, 2));
-
-    // const pids = (await run(`ps -o ppid=${process.pid}`))
-    //     .split(RX_NL).map(id => +id.trim()).filter(id => id);
-    // const log = await run(`ps -o pid,command ${pids.join(' ')} | grep npm`);
-    // const ppid = +(log.split(RX_NL)[0] || '').split(RX_SP)[0];
-    //
-    // pkg && exec(`INIT_CWD="${cwd}" VERBOSE="${ process.env.VERBOSE }" ${
-    //     resolve(__dirname, 'update.sh')} ${
-    //     ppid } '${
-    //     JSON.stringify(pkg.dependencies) }' &`,
-    // );
-})();
+pkg && writeFileSync(
+    targetFile,
+    JSON.stringify(pkg, null, 2),
+    { encoding: 'utf8' },
+);
