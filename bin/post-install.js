@@ -14,6 +14,7 @@
  * OTHER TORTUOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
+const { writeFileSync } = require('fs');
 const { resolve } = require('path');
 const { exec } = require('child_process');
 
@@ -210,15 +211,18 @@ async function run(command) {
 }
 
 (async () => {
-    const pids = (await run(`ps -o ppid=${process.pid}`))
-        .split(RX_NL).map(id => +id.trim()).filter(id => id);
-    const log = await run(`ps -o pid,command ${pids.join(' ')} | grep npm`);
-    const ppid = +(log.split(RX_NL)[0] || '').split(RX_SP)[0];
     const pkg = merge(sourceFile, targetFile);
 
-    pkg && exec(`INIT_CWD="${cwd}" VERBOSE="${ process.env.VERBOSE }" ${
-        resolve(__dirname, 'update.sh')} ${
-        ppid } '${
-        JSON.stringify(pkg.dependencies) }' &`,
-    );
+    writeFileSync(targetFile, JSON.stringify(pkg, null, 2));
+
+    // const pids = (await run(`ps -o ppid=${process.pid}`))
+    //     .split(RX_NL).map(id => +id.trim()).filter(id => id);
+    // const log = await run(`ps -o pid,command ${pids.join(' ')} | grep npm`);
+    // const ppid = +(log.split(RX_NL)[0] || '').split(RX_SP)[0];
+    //
+    // pkg && exec(`INIT_CWD="${cwd}" VERBOSE="${ process.env.VERBOSE }" ${
+    //     resolve(__dirname, 'update.sh')} ${
+    //     ppid } '${
+    //     JSON.stringify(pkg.dependencies) }' &`,
+    // );
 })();
