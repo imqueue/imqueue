@@ -15,15 +15,28 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 const { writeFileSync } = require('fs');
+const { dirname, resolve } = require('path');
+
+const depsJson = process.argv[3];
+const pkgPath = process.argv[2];
+const errLog = resolve(dirname(pkgPath), 'imq-install-error.log');
 
 try {
-    const deps = JSON.parse(process.argv[3]);
-    const pkg = require(process.argv[2]);
+    const deps = JSON.parse(depsJson);
+    const pkg = require(pkgPath);
 
     if (deps) {
         pkg.dependencies = deps;
-        writeFileSync(process.argv[2], JSON.stringify(pkg, null, 2));
+        writeFileSync(
+            pkgPath,
+            JSON.stringify(pkg, null, 2),
+            { encoding: 'utf8' },
+        );
     }
 } catch (err) {
-    console.error('Invalid arguments!', err);
+    writeFileSync(
+        errLog,
+        `Error saving '${ depsJson }' to ${pkgPath}\n${ err.stack }`,
+        { encoding: 'utf8' },
+    );
 }
