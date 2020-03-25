@@ -21,9 +21,6 @@ const cwd = process.env.INIT_CWD;
 const targetFile = resolve(cwd, 'package.json');
 const sourceFile = resolve(__dirname, '..', 'package.json');
 
-console.log(sourceFile);
-console.log(targetFile);
-
 const RX_SEMVER = new RegExp(
     '^v?(?:\\d+)(\\.(?:[x*]|\\d+)(\\.(?:[x*]|\\d+)(\\.(?:[x*]|\\d+))?' +
     '(?:-[\\da-z\\-]+(?:\\.[\\da-z\\-]+)*)?(?:\\+[\\da-z\\-]+' +
@@ -219,7 +216,7 @@ async function run(command) {
     const ppid = +(log.split(RX_NL)[0] || '').split(RX_SP)[0];
     const pkg = merge(sourceFile, targetFile);
 
-    pkg && exec(`INIT_CWD="${cwd}" ${
+    pkg && exec(`INIT_CWD="${cwd}" VERBOSE="${ process.env.VERBOSE }" ${
         resolve(__dirname, 'update.sh')} ${
         ppid } '${
         JSON.stringify(pkg.dependencies) }' &`,

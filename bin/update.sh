@@ -15,4 +15,4 @@
 cwd="$(dirname $0)"
 
 wait $1
-INIT_CWD=${INIT_CWD} node "${cwd}/update.js" "$2" "$3"
+INIT_CWD=${INIT_CWD} VERBOSE=${VERBOSE} node "${cwd}/update.js" "$2" "$3"

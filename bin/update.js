@@ -35,11 +35,11 @@ try {
             { encoding },
         );
     }
-    writeFileSync(
+    process.env.VERBOSE && writeFileSync(
         infoLog,
         `Saved '${ depsJson }' to '${ pkgPath }'!\n`,
         { encoding }
-    )
+    );
 } catch (err) {
     writeFileSync(
         errLog,
