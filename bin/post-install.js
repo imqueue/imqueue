@@ -65,7 +65,7 @@ function ensureValid(version) {
 
     if (!RX_SEMVER.test(version)) {
         throw new Error(
-            `Invalid argument not valid semver ('${version}' received)`,
+            `Invalid argument not valid semver ('${ version }' received)`,
         );
     }
 }
