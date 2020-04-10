@@ -13,7 +13,7 @@ npm i --save @imqueue/imqueue
 
 ## Contributing
 
-Any contributions are greatly appreciated. Feel free to fork, propose PRs, open
+Any contributions greatly appreciated. Feel free to fork, propose PRs, open
 issues, do whatever you think may be helpful to this project. PRs which passes
 all tests and do not brake tslint rules are first-class candidates to be
 accepted!
