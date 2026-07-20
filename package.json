@@ -6,7 +6,7 @@
     "postinstall": "./bin/post-install.js"
   },
   "author": "imqueue.com <support@imqueue.com>",
-  "license": "ISC",
+  "license": "GPL-3.0-only",
   "dependencies": {
     "@imqueue/async-logger": "^1.0.0",
     "@imqueue/core": "^1.7.3",
