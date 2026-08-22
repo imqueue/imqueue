@@ -1,22 +1,11 @@
 {
   "name": "@imqueue/imqueue",
   "version": "0.0.22",
+  "description": "Maintainer tooling for the @imqueue framework",
   "private": true,
-  "description": "Meta-package for @imqueue framework",
-  "scripts": {
-    "postinstall": "./bin/post-install.js"
+  "bin": {
+    "imq-release": "./bin/imq-release.js"
   },
   "author": "imqueue.com <support@imqueue.com>",
-  "license": "GPL-3.0-only",
-  "dependencies": {
-    "@imqueue/async-logger": "^3.1.0",
-    "@imqueue/core": "^3.2.4",
-    "@imqueue/dd-trace": "^3.0.1",
-    "@imqueue/js": "^2.0.2",
-    "@imqueue/pg-cache": "^5.0.1",
-    "@imqueue/pg-pubsub": "^3.0.0",
-    "@imqueue/rpc": "^3.4.4",
-    "@imqueue/sequelize": "^4.0.2",
-    "@imqueue/tag-cache": "^3.0.1"
-  }
+  "license": "GPL-3.0-only"
 }
