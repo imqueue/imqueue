@@ -46,11 +46,19 @@
  * registry is detected and skipped, so resuming is safe and re-running a finished
  * release is a no-op.
  *
+ * The one exception, and it is deliberate: preflight FAST-FORWARDS a checkout that
+ * is behind origin, on a plan-only run too. Everything downstream is derived from
+ * the working tree - which packages have commits since their last tag, what bump
+ * those commits imply, the whole plan - so planning against a stale checkout gives
+ * a confident wrong answer rather than an error. --no-pull refuses instead.
+ *
  * WHAT IT WILL NOT DO. It does not run tests - the premise is that CI is already
- * green, and it verifies that through `gh` rather than taking it on trust. It
- * will not touch a repo that is dirty, ahead, behind, or on a non-default branch.
- * It never runs `git add -A`; only package.json and package-lock.json are staged,
- * by explicit path.
+ * green, and it verifies that through `gh` rather than taking it on trust. It will
+ * not touch a repo that is dirty, ahead of origin, diverged from it, or on a
+ * non-default branch, and it will not merge or rebase anything: the only history
+ * it moves is a fast-forward onto a commit origin already has. It never runs
+ * `git add -A`; only package.json and package-lock.json are staged, by explicit
+ * path.
  */
 
 'use strict';
@@ -423,7 +431,10 @@ raises its @imqueue ranges to what this run just published, commits and pushes
 that, bumps, pushes tags and publishes - waiting for the registry to serve each
 version before the next package tries to install it.
 
-Prints a plan and stops. ${bold('Nothing is written without --yes.')}
+Prints a plan and stops. ${bold('Nothing is published without --yes.')} Preflight does
+fast-forward any checkout that is behind origin, including on a plan-only run - the
+plan is derived from the working tree, so it has to be current first. ${blue('--no-pull')}
+turns that off and refuses instead.
 
   ${blue('--yes, -y')}         actually do it (default: plan only)
   ${blue('--only a,b')}        restrict the changed set (same as naming packages)
@@ -431,6 +442,7 @@ Prints a plan and stops. ${bold('Nothing is written without --yes.')}
   ${blue('--bump <type>')}     force major|minor|patch for every changed package
   ${blue('--bump p=minor,q=patch')}
                     force per package; the rest stay inferred
+  ${blue('--no-pull')}         do not fast-forward checkouts that are behind origin
   ${blue('--skip-ci')}         do not require a green CI run for HEAD
   ${blue('--allow-new')}       permit first-ever publishes (default: refuse)
   ${blue('--root <dir>')}      where the checkouts live (default: this repo's parent)
@@ -470,6 +482,7 @@ function parseArgs(argv) {
         siteRepo: 'imqueue/imqueue.com',
         siteWorkflow: 'refresh-api-docs.yml',
         siteOnly: false,
+        pull: true,
     };
     const rest = [];
 
@@ -499,6 +512,8 @@ function parseArgs(argv) {
             o.skipCi = true;
         } else if (a === '--allow-new') {
             o.allowNew = true;
+        } else if (a === '--no-pull') {
+            o.pull = false;
         } else if (a === '--no-docs') {
             o.docs = false;
         } else if (a === '--site-only') {
@@ -645,6 +660,7 @@ async function preflight(repos, opts) {
     log(bold('\nPreflight'));
 
     const problems = [];
+    const pulled = [];
 
     for (const repo of repos) {
         // Branches and tags are fetched separately and on purpose. `--tags` fails
@@ -706,12 +722,50 @@ async function preflight(repos, opts) {
         const ahead = git(repo.path, 'rev-list', '--count', `origin/${repo.branch}..HEAD`).out;
         const behind = git(repo.path, 'rev-list', '--count', `HEAD..origin/${repo.branch}`).out;
 
-        if (ahead !== '0') {
+        if (ahead !== '0' && behind !== '0') {
+            // Diverged. Reconciling that means a merge or a rebase, and choosing
+            // between them is a judgement about someone's unpushed work - not a
+            // release tool's call.
+            problems.push([repo.dir,
+                `diverged from origin: ${ahead} ahead, ${behind} behind`]);
+        } else if (ahead !== '0') {
             problems.push([repo.dir, `${ahead} commit(s) not pushed`]);
-        }
+        } else if (behind !== '0') {
+            // BRING THE CHECKOUT UP TO DATE, and do it before anything is read
+            // from it. Everything downstream - which packages have commits since
+            // their last tag, what bump those commits imply, what the plan says -
+            // is derived from the working tree, so planning against a stale one
+            // produces a confident and wrong answer. This is the only thing a
+            // plan-only run writes, and --no-pull turns it off.
+            //
+            // --ff-only, never a merge or rebase: the tree is verified clean just
+            // above and history is verified not to have diverged just above that,
+            // so this can only ever move the branch pointer forward to a commit
+            // that is already on origin. It creates nothing and can lose nothing.
+            if (dirty) {
+                // The clean check above RECORDS a problem; it has to GUARD this
+                // too. Without this branch the fast-forward went ahead on a dirty
+                // tree - `git merge --ff-only` only refuses when the incoming
+                // commits touch the modified files, so an unrelated edit sails
+                // straight through and the tree moves under the operator.
+                problems.push([repo.dir,
+                    `${behind} commit(s) behind origin, and not fast-forwarded `
+                    + 'because the tree is dirty']);
+            } else if (opts.pull) {
+                const ff = git(repo.path, 'merge', '--ff-only',
+                    `origin/${repo.branch}`);
 
-        if (behind !== '0') {
-            problems.push([repo.dir, `${behind} commit(s) behind origin`]);
+                if (ff.code === 0) {
+                    pulled.push([repo.dir, behind]);
+                } else {
+                    problems.push([repo.dir,
+                        `${behind} commit(s) behind origin and fast-forward failed: `
+                        + (ff.err.split('\n').filter(Boolean).pop() || 'unknown error')]);
+                }
+            } else {
+                problems.push([repo.dir,
+                    `${behind} commit(s) behind origin (--no-pull, so not fast-forwarded)`]);
+            }
         }
 
         repo.head = git(repo.path, 'rev-parse', 'HEAD').out;
@@ -756,6 +810,10 @@ async function preflight(repos, opts) {
 
         log(`\n  Fix these and run again. ${dim('--skip-ci relaxes only the CI checks.')}`);
         process.exit(1);
+    }
+
+    for (const [dir, n] of pulled) {
+        log(`  ${green('pulled')} ${dir}: fast-forwarded ${n} commit(s) from origin`);
     }
 
     log(`  ${green('ok')}    ${repos.length} repo(s): clean, on their default branch, level with origin`);

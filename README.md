@@ -97,11 +97,24 @@ It prints a plan and stops. Nothing is committed, pushed or published without
 
 Every repository is fetched and checked **before any repository is touched**, so a
 run either starts from a wholly sane state or does not start at all. It will not
-proceed past a checkout that is dirty, ahead of origin, behind origin, on a
+proceed past a checkout that is dirty, ahead of origin, diverged from it, on a
 non-default branch, whose `package.json` version disagrees with what npm serves,
 or whose local tags disagree with origin's. The fetch is not optional and it comes
 first: judging sync against unfetched refs is not a weaker check, it is a check
 that lies.
+
+**A checkout that is behind origin is fast-forwarded**, including on a plan-only
+run — that is the one thing a plan writes. The whole plan is derived from the
+working tree, so planning against a stale checkout produces a confident wrong
+answer instead of an error: a package whose new commits you have not pulled looks
+like a package with nothing to release. `--no-pull` refuses instead of pulling.
+
+The fast-forward is guarded, not merely preceded, by the cleanliness check. It is
+`--ff-only` onto a commit origin already has, so it creates nothing and can lose
+nothing; it never merges or rebases, and it is skipped entirely when the tree is
+dirty. (`git merge --ff-only` alone is not enough of a guard: it refuses only when
+the incoming commits touch the files you have modified, so an unrelated edit
+sails straight through and the tree moves under you.)
 
 CI is judged per workflow rather than per run. One commit can trigger the same
 workflow twice — pushing the commit and pushing its tag both fire `on: push` — and
