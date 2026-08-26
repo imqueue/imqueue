@@ -4,7 +4,7 @@
 
 Maintainer tooling for the [@imqueue](https://imqueue.org) framework. Not a
 published package and nothing to install — it is the home of the scripts that
-operate the other repositories.
+operate the other repositories. And a home to discussions.
 
 **Not published to npm.** `package.json` carries `"private": true`, so `npm
 publish` refuses to run here — this is deliberate, not an oversight. A `0.0.20`
