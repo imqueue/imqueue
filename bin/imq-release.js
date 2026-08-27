@@ -299,7 +299,13 @@ function defaultBranch(repo) {
 }
 
 function lastTag(repo) {
-    const r = git(repo.path, 'describe', '--tags', '--abbrev=0');
+    // --match, because only a version tag marks a release boundary. Without it
+    // `describe` returns the nearest tag of ANY kind, so one scratch tag sitting
+    // on or after the last release - `backup/pre-email-fix`, a `wip/...`, a
+    // reviewer's marker - becomes the range's left edge, `tag..HEAD` comes back
+    // empty, and the repo reports as level while real commits sit unreleased.
+    // Silent: the run says "Nothing to release" and exits 0.
+    const r = git(repo.path, 'describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*');
 
     return r.code === 0 && r.out ? r.out : null;
 }
