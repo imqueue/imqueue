@@ -186,13 +186,37 @@ function registry(name) {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Whether the registry answers 200 for a tarball URL.
+ *
+ * The packument and the tarball are served separately, and the tarball can lag:
+ * @imqueue/tag-cache 3.0.13 was listed in its packument while its .tgz still
+ * answered 404, and the dependent's CI ran `npm ci` inside that gap - which reads
+ * the tarball URL straight from package-lock.json - and went red on a commit
+ * that was fine.
+ */
+function tarballServed(url) {
+    return new Promise((ok) => {
+        const req = https.request(url, { method: 'HEAD', timeout: 15000 }, (res) => {
+            res.resume();
+            ok(res.statusCode === 200);
+        });
+
+        req.on('timeout', () => { req.destroy(); ok(false); });
+        req.on('error', () => ok(false));
+        req.end();
+    });
+}
+
+/**
  * Block until the registry serves `version`, or give up.
  *
  * Not belt-and-braces. The next package in the order runs
  * `npm install --save @imqueue/<this>@<version>`, which npm resolves against the
- * registry: publish exiting 0 is not the same as the version being installable,
- * and that gap is the exact window in which a dependent gets released pointing at
- * something nobody can install yet.
+ * registry, and its pushed commit makes CI run `npm ci` against the tarball:
+ * publish exiting 0 is not the same as the version being installable, and that
+ * gap is the exact window in which a dependent gets released pointing at
+ * something nobody can install yet. So "served" means BOTH the packument lists
+ * the version AND its tarball answers 200.
  */
 async function awaitPublished(name, version, timeoutSec) {
     const deadline = Date.now() + timeoutSec * 1000;
@@ -200,8 +224,10 @@ async function awaitPublished(name, version, timeoutSec) {
 
     for (;;) {
         const r = await registry(name);
+        const meta = r.versions && r.versions[version];
+        const tarball = meta && meta.dist && meta.dist.tarball;
 
-        if (r.versions && r.versions[version]) {
+        if (meta && (!tarball || await tarballServed(tarball))) {
             waited && log(dim(`      registry served ${version} after ${waited}s`));
 
             return true;
