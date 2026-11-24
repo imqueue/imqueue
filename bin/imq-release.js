@@ -324,16 +324,60 @@ function defaultBranch(repo) {
     return g.code === 0 ? g.out : 'master';
 }
 
-function lastTag(repo) {
+function lastTag(repo, from = 'HEAD') {
     // --match, because only a version tag marks a release boundary. Without it
     // `describe` returns the nearest tag of ANY kind, so one scratch tag sitting
     // on or after the last release - `backup/pre-email-fix`, a `wip/...`, a
     // reviewer's marker - becomes the range's left edge, `tag..HEAD` comes back
     // empty, and the repo reports as level while real commits sit unreleased.
     // Silent: the run says "Nothing to release" and exits 0.
-    const r = git(repo.path, 'describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*');
+    const r = git(repo.path, 'describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', from);
 
     return r.code === 0 && r.out ? r.out : null;
+}
+
+/**
+ * Whether HEAD is a version bump that reached origin but never the registry:
+ * HEAD carries the tag `v<package.json version>`, origin has that tag at the same
+ * commit, and the registry does not list the version.
+ */
+function bumpedNotPublished(repo) {
+    const tag = `v${repo.version}`;
+
+    if (repo.published[repo.version]) {
+        return false;
+    }
+
+    if (!git(repo.path, 'tag', '--points-at', 'HEAD').out.split('\n').includes(tag)) {
+        return false;
+    }
+
+    const remote = git(repo.path, 'ls-remote', 'origin', `refs/tags/${tag}^{}`, `refs/tags/${tag}`);
+    const shas = remote.out.split('\n').filter(Boolean).map((l) => l.split('\t')[0]);
+
+    return remote.code === 0 && shas.includes(repo.head);
+}
+
+/**
+ * Packed files that are dotfiles git does not track - an editor's or an
+ * assistant's local settings directory, an `.env`, an `.npmrc`. npm packs from the
+ * working tree and does not read the global gitignore, so a file kept out of
+ * git that way still ships unless .npmignore names it. Tracked dotfiles are
+ * left alone: they are in the public repository already.
+ */
+function strayDotfiles(repo) {
+    const r = sh('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: repo.path });
+    let files;
+
+    try {
+        files = JSON.parse(r.out)[0].files.map((f) => f.path);
+    } catch (e) {
+        throw new Error(`${repo.dir}: npm pack --dry-run gave no file list`);
+    }
+
+    return files
+        .filter((p) => p.split('/').some((seg) => seg.startsWith('.')))
+        .filter((p) => git(repo.path, 'ls-files', '--error-unmatch', '--', p).code !== 0);
 }
 
 function commitsSince(repo, tag) {
@@ -814,8 +858,18 @@ async function preflight(repos, opts) {
         // computed from the wrong base. This catches the classic "npm version and
         // npm publish, forgot to push", and its mirror image.
         if (!reg.missing && reg.latest && reg.latest !== repo.version) {
-            problems.push([repo.dir,
-                `package.json says ${repo.version} but npm serves ${reg.latest}`]);
+            if (opts.resume && bumpedNotPublished(repo)) {
+                // A run halted between `push --follow-tags` and `npm publish`: the
+                // version commit and its tag are on origin, the registry never got
+                // it. That is the one disagreement --resume exists to finish, so it
+                // is carried forward to be published as it stands, not re-bumped.
+                repo.pending = true;
+                repo.tag = lastTag(repo, 'HEAD^');
+                repo.commits = commitsSince(repo, repo.tag);
+            } else {
+                problems.push([repo.dir,
+                    `package.json says ${repo.version} but npm serves ${reg.latest}`]);
+            }
         }
     }
 
@@ -1046,7 +1100,7 @@ async function main() {
 
         // Named explicitly with no new commits: trust the human, they may be
         // re-releasing deliberately.
-        if (repo.commits.length || named) {
+        if (repo.commits.length || named || repo.pending) {
             changed.add(repo.name);
         }
     }
@@ -1088,6 +1142,11 @@ async function main() {
         const forced = opts.bumps[repo.dir] || opts.bumps[name.replace(SCOPE, '')];
         let type;
         let why;
+
+        if (repo.pending) {
+            planned.set(name, { repo, type: 'pending', why: 'tagged and pushed, never published', next: repo.version });
+            continue;
+        }
 
         if (changed.has(name)) {
             type = forced || opts.defaultBump || inferBump(repo.commits);
@@ -1154,57 +1213,80 @@ async function main() {
         log(`\n  ${bold(name)} ${repo.version} ${dim('->')} ${green(next)}`);
 
         try {
-            // 1. raise the ranges this run has already published
-            const bumpedDeps = [];
+            // 0. nothing goes out that is neither tracked nor meant to ship
+            const stray = strayDotfiles(repo);
 
-            for (const dep of Object.keys(repo.deps)) {
-                const shipped = state.done[dep];
-
-                if (!shipped || repo.deps[dep].range === `^${shipped}`) {
-                    continue;
-                }
-
-                log(`      ${dim('npm i --save')} ${dep}@${shipped}`);
-                must(`${repo.dir}: install ${dep}@${shipped}`,
-                    'npm', ['install', '--save', `${dep}@${shipped}`], { cwd: repo.path });
-                bumpedDeps.push(`${dep.replace(SCOPE, '')} -> ^${shipped}`);
+            if (stray.length) {
+                throw new Error(`${repo.dir}: would publish untracked ${stray.join(', ')}`
+                    + ' - add it to .npmignore or move it out of the tree');
             }
 
-            // 2. commit and push that by itself, before the version bump, so the
-            //    tag lands on a tree already pointing at the right dependencies
-            if (bumpedDeps.length) {
-                // Only manifests that exist and are actually trackable. `git add`
-                // errors on a pathspec matching nothing and on an ignored file, and
-                // an error here aborts a release halfway through - with some
-                // packages already published and unpublishable. Not every repo in
-                // the world commits its lockfile.
-                const manifests = ['package.json', 'package-lock.json'].filter((f) =>
-                    existsSync(join(repo.path, f))
-                    && git(repo.path, 'check-ignore', '-q', '--', f).code !== 0);
+            if (repo.pending) {
+                // Already bumped, committed, tagged and pushed by the halted run.
+                // Its tree cannot take a dependency raise without moving HEAD off
+                // the tag, so refuse rather than publish stale ranges.
+                const stale = Object.keys(repo.deps).filter((d) =>
+                    state.done[d] && repo.deps[d].range !== `^${state.done[d]}`);
 
-                const dirty = git(repo.path, 'status', '--porcelain', '--', ...manifests).out;
-
-                if (dirty) {
-                    // Explicit pathspec. A release tool must never `git add -A`:
-                    // whatever else is lying around is not ours to commit.
-                    must(`${repo.dir}: stage manifests`, 'git',
-                        ['add', '--', ...manifests], { cwd: repo.path });
-                    must(`${repo.dir}: commit deps`, 'git',
-                        ['commit', '-m', `chore(deps): ${bumpedDeps.join(', ')}`], { cwd: repo.path });
-                    must(`${repo.dir}: push deps`, 'git', ['push'], { cwd: repo.path });
-                    log(`      ${green('pushed')} chore(deps): ${bumpedDeps.join(', ')}`);
+                if (stale.length) {
+                    throw new Error(`${repo.dir}: v${next} is tagged with old ranges for`
+                        + ` ${stale.join(', ')} - this needs a human`);
                 }
+
+                log(`      ${dim('resume')} v${next} is already tagged and pushed`);
+            } else {
+                // 1. raise the ranges this run has already published
+                const bumpedDeps = [];
+
+                for (const dep of Object.keys(repo.deps)) {
+                    const shipped = state.done[dep];
+
+                    if (!shipped || repo.deps[dep].range === `^${shipped}`) {
+                        continue;
+                    }
+
+                    log(`      ${dim('npm i --save')} ${dep}@${shipped}`);
+                    must(`${repo.dir}: install ${dep}@${shipped}`,
+                        'npm', ['install', '--save', `${dep}@${shipped}`], { cwd: repo.path });
+                    bumpedDeps.push(`${dep.replace(SCOPE, '')} -> ^${shipped}`);
+                }
+
+                // 2. commit and push that by itself, before the version bump, so the
+                //    tag lands on a tree already pointing at the right dependencies
+                if (bumpedDeps.length) {
+                    // Only manifests that exist and are actually trackable. `git add`
+                    // errors on a pathspec matching nothing and on an ignored file, and
+                    // an error here aborts a release halfway through - with some
+                    // packages already published and unpublishable. Not every repo in
+                    // the world commits its lockfile.
+                    const manifests = ['package.json', 'package-lock.json'].filter((f) =>
+                        existsSync(join(repo.path, f))
+                        && git(repo.path, 'check-ignore', '-q', '--', f).code !== 0);
+
+                    const dirty = git(repo.path, 'status', '--porcelain', '--', ...manifests).out;
+
+                    if (dirty) {
+                        // Explicit pathspec. A release tool must never `git add -A`:
+                        // whatever else is lying around is not ours to commit.
+                        must(`${repo.dir}: stage manifests`, 'git',
+                            ['add', '--', ...manifests], { cwd: repo.path });
+                        must(`${repo.dir}: commit deps`, 'git',
+                            ['commit', '-m', `chore(deps): ${bumpedDeps.join(', ')}`], { cwd: repo.path });
+                        must(`${repo.dir}: push deps`, 'git', ['push'], { cwd: repo.path });
+                        log(`      ${green('pushed')} chore(deps): ${bumpedDeps.join(', ')}`);
+                    }
+                }
+
+                // 3. bump
+                must(`${repo.dir}: npm version ${type}`, 'npm', ['version', type], { cwd: repo.path });
+                log(`      ${green('bumped')} ${type} -> ${next}`);
+
+                // 4. push commit AND tag. Never publish what the remote has not seen:
+                //    an unpushed tag is a published version nobody can check out.
+                must(`${repo.dir}: push --follow-tags`, 'git',
+                    ['push', '--follow-tags'], { cwd: repo.path });
+                log(`      ${green('pushed')} commit + tag`);
             }
-
-            // 3. bump
-            must(`${repo.dir}: npm version ${type}`, 'npm', ['version', type], { cwd: repo.path });
-            log(`      ${green('bumped')} ${type} -> ${next}`);
-
-            // 4. push commit AND tag. Never publish what the remote has not seen:
-            //    an unpushed tag is a published version nobody can check out.
-            must(`${repo.dir}: push --follow-tags`, 'git',
-                ['push', '--follow-tags'], { cwd: repo.path });
-            log(`      ${green('pushed')} commit + tag`);
 
             // 5. publish, with our stdio so a 2FA prompt actually works
             const pub = sh('npm', ['publish'], { cwd: repo.path, interactive: true });
